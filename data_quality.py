@@ -97,14 +97,15 @@ def completeness_dataframes(clean_files, dirty_files):
 '''
     
 def distinct_counts_dataframes(clean_files, dirty_files):
-
     clean_distinct_counts_df = pd.DataFrame()
     dirty_distinct_counts_df = pd.DataFrame()
     
     for file in clean_files:
+        data = pd.read_csv(file)
         clean_distinct_counts_df[file] = data.nunique()
     for file in dirty_files:
-        dirty_distinct_counts_df[dirty_flights_file] = data.nunique()
+        data = pd.read_csv(file)
+        dirty_distinct_counts_df[file] = data.nunique()
     
     return clean_distinct_counts_df, dirty_distinct_counts_df
 
