@@ -11,14 +11,13 @@ import os
 import matplotlib.pyplot as plt
 
 
-def partition_data_files(all_files):
-	'''
-	@description: this function reads in a series of filenames and separates them into clean + dirty filenames
-	@params: all_files - the filename of all batch .csv files, should be of the form 'filepath/*.csv'
-	@return: clean_files - list, sorted list of all clean data filenames
+'''
+@description: this function reads in a series of filenames and separates them into clean + dirty filenames
+@params: all_files - the filename of all batch .csv files, should be of the form 'filepath/*.csv'
+@return: clean_files - list, sorted list of all clean data filenames
          dirty_files - list, sorted list of all dirty data filenames
-	'''
-
+'''
+def partition_data_files(all_files):
     data = glob.glob(all_files)
     dirty_files = []
     clean_files = []
@@ -35,31 +34,26 @@ def partition_data_files(all_files):
     
     return clean_files, dirty_files
 
-
-def filename_num(filename):
-    '''
-    @description: used in partition_data_files; helper function for .sort(key=____)
+'''
+@description: used in partition_data_files; helper function for .sort(key=____)
               bc Python doesn't sort the filename strings in the order we want by default
-    @params: filename - the single filename we want the number (integer order) of
-    @return: order_number - the number of the file
-    '''
-
+@params: filename - the single filename we want the number (integer order) of
+@return: order_number - the number of the file
+'''
+def filename_num(filename):
     remove_csv = filename.split('.')[0]
     number = remove_csv.split('_')[-1]
     return int(number)
 
 
-
-def completeness_dataframes(clean_files, dirty_files):
-
-    '''
-    @description: this function generates the completeness ratio dataframes for both clean and dirty data files
-    @params: clean_files - list of strings, clean filenames
+'''
+@description: this function generates the completeness ratio dataframes for both clean and dirty data files
+@params: clean_files - list of strings, clean filenames
          dirty_files - list of strings, dirty filenames
-    @return: clean_completeness_ratio_df - dataframe of the ratio of nulls to non-nulls in the clean dataframe
+@return: clean_completeness_ratio_df - dataframe of the ratio of nulls to non-nulls in the clean dataframe
          dirty_completeness_ratio_df - dataframe of the ratio of nulls to non-nulls in the dirty dataframe
-    '''
-    
+'''
+def completeness_dataframes(clean_files, dirty_files):    
     clean_completeness_ratio_df = pd.DataFrame()
     dirty_completeness_ratio_df = pd.DataFrame()
     
@@ -94,15 +88,16 @@ def completeness_dataframes(clean_files, dirty_files):
     return clean_completeness_ratio_df, dirty_completeness_ratio_df
 
 
-def distinct_counts_dataframes(clean_files, dirty_files):	
-    '''
-    @description: this function generates the distinct counts dataframes for both clean and dirty data files
-    @params: clean_files - list of strings, clean filenames
+'''
+@description: this function generates the distinct counts dataframes for both clean and dirty data files
+@params: clean_files - list of strings, clean filenames
          dirty_files - list of strings, dirty filenames
-    @return: clean_distinct_counts_df - dataframe of the ratio of nulls to non-nulls in the clean dataframe
+@return: clean_distinct_counts_df - dataframe of the ratio of nulls to non-nulls in the clean dataframe
          dirty_distinct_counts_df - dataframe of the ratio of nulls to non-nulls in the dirty dataframe
-    '''
+'''
     
+def distinct_counts_dataframes(clean_files, dirty_files):
+
     clean_distinct_counts_df = pd.DataFrame()
     dirty_distinct_counts_df = pd.DataFrame()
     
