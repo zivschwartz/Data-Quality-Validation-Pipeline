@@ -84,6 +84,13 @@ def completeness_dataframes(clean_files, dirty_files):
 
         #add to df
         dirty_completeness_ratio_df[file] = ratio
+    
+    data = pd.read_csv(file)
+    cols_to_use = data.columns
+   
+    clean_completeness_ratio_df = clean_completeness_ratio_df[clean_completeness_ratio_df.index.isin(cols_to_use)]
+    dirty_completeness_ratio_df = dirty_completeness_ratio_df[dirty_completeness_ratio_df.index.isin(cols_to_use)]
+    
         
     return clean_completeness_ratio_df, dirty_completeness_ratio_df
 
