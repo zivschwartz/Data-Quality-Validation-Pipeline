@@ -9,6 +9,12 @@ import pandas as pd
 import glob
 import os
 import matplotlib.pyplot as plt
+import tensorflow as tf
+import tensorflow_data_validation as tfdv
+import time
+import warnings
+from tensorflow_metadata.proto.v0 import schema_pb2
+warnings.simplefilter('ignore')
 
 
 '''
@@ -156,23 +162,81 @@ def determine_acceptable_metric_range(batches):
 #     distinct_range['max'] = distinct_means + 3*distinct_ste
     return completeness_range, distinct_range
 
-def is_acceptable(train_batch, test_batch):
-    completeness_range, distinct_range = determine_acceptable_metric_range(train_batch)
-    test_batch_completeness, __ = completeness_dataframes(test_batch, test_batch)
-    test_batch_distinct, __ = distinct_counts_dataframes(test_batch, test_batch)
-    completeness_within_range = 0
-    distinct_within_range = 0
-    for i in range(len(test_batch_distinct.values)):
-        if test_batch_distinct.values[i][0] >= (distinct_range[i:i+1]['min'][0]) and test_batch_distinct.values[i][0] <= (distinct_range[i:i+1]['max'][0]):
-            distinct_within_range = distinct_within_range + 1
-        if test_batch_completeness.values[i][0] >= (completeness_range[i:i+1]['min'][0]) and test_batch_completeness.values[i][0] <= (completeness_range[i:i+1]['max'][0]):
-            completeness_within_range = completeness_within_range + 1
-    
-    
-    if completeness_within_range/test_batch_completeness.shape[0] > .8 and distinct_within_range/test_batch_completeness.shape[0] > .8:
-        return True
-    else:
-        return False
+def is_acceptable(train_batch, test_batch, method):
+    if method == 'original':
+        completeness_range, distinct_range = determine_acceptable_metric_range(train_batch)
+        test_batch_completeness, __ = completeness_dataframes(test_batch, test_batch)
+        test_batch_distinct, __ = distinct_counts_dataframes(test_batch, test_batch)
+        completeness_within_range = 0
+        distinct_within_range = 0
+        for i in range(len(test_batch_distinct.values)):
+            if test_batch_distinct.values[i][0] >= (distinct_range[i:i+1]['min'][0]) and test_batch_distinct.values[i][0] <= (distinct_range[i:i+1]['max'][0]):
+                distinct_within_range = distinct_within_range + 1
+            if test_batch_completeness.values[i][0] >= (completeness_range[i:i+1]['min'][0]) and test_batch_completeness.values[i][0] <= (completeness_range[i:i+1]['max'][0]):
+                completeness_within_range = completeness_within_range + 1
+
+
+        if completeness_within_range/test_batch_completeness.shape[0] > .8 and distinct_within_range/test_batch_completeness.shape[0] > .8:
+            return True
+        else:
+            return False
+     
+    elif method == 'tfdv':
+        #set all flags (this is bc what we need to do with TFDV depends on the type of data we're dealing with)
+        flights = False
+        fb = False
+        dirty = False
+        #if this is flights data
+        if 'FLIGHTS' in test_batch[0]: flights = True
+        #if this is facebook data    
+        if 'FBPosts' in test_batch[0]: fb = True
+
+        #if the test batch is a dirty file
+        if 'dirty' in test_batch[0]: dirty = True
+
+        ######## now work on updating the schema ####### 
+        #update schema with all the files in the train batch
+        updated_schema = acceptable_schema(train_batch)
+
+        #make sure TFDV knows the columns that are only in the clean + not the dirty data
+        updated_schema.default_environment.append('TRAINING')
+        updated_schema.default_environment.append('TESTING')
+
+        #specify that 'for_key' feature is not in TESTING environment
+        if dirty and flights:
+            tfdv.get_feature(updated_schema, 'for_key').not_in_environment.append('TESTING')
+            #get the number of anomalies for the test batch prior to relaxing constraints
+            num_anomalies = get_num_anomalies(test_batch[0], updated_schema, environment='TESTING')
+
+        #don't need to do anything for the dirty facebook data (there are no extra columns to worry about)
+        else: 
+            #if it's a clean file, default environment is TRAINING (or dirty facebook file since no extra cols)
+            num_anomalies = get_num_anomalies(test_batch[0], updated_schema)
+
+        #relax constraints for each type of data
+        if flights:
+            tfdv.get_feature(updated_schema,'ArrivalGate').distribution_constraints.min_domain_mass = 0.8
+            tfdv.get_feature(updated_schema,'DepartureGate').distribution_constraints.min_domain_mass = 0.8
+        if fb:
+            tfdv.get_feature(updated_schema,'outlet').distribution_constraints.min_domain_mass = 0.65
+            tfdv.get_feature(updated_schema,'domain').distribution_constraints.min_domain_mass = 0.6
+
+        #get anomalies after having relaxed constraints
+        if dirty and flights:
+            adjusted_num_anomalies = get_num_anomalies(test_batch[0], updated_schema, environment='TESTING')
+        else:
+            adjusted_num_anomalies = get_num_anomalies(test_batch[0], updated_schema)
+
+        ######## determine whether acceptable or not ########
+        #my definition of "acceptable" is just if the relaxed constraints had any affect on the anomalies
+        #being present (so relaxing constraints should yield less anomalies after adjustment)
+        if adjusted_num_anomalies < num_anomalies: 
+            return True 
+        else:
+            return False
+        
+    else: #method == 'baseline'
+        pass #Ziv put your function here
     
 def analysis(i, train_type, clean, dirty, batch_size):
     if train_type == 'rolling':
@@ -220,3 +284,106 @@ def get_accuracy(analysis_df):
 
 
 
+'''
+@description: this is the same function from assignment2; infers schema from a given csv file
+@params: csv_file - string csv filepath to read
+         column_names - string list, names of the columns along the csv header
+@return: schema - inferred schema
+'''
+def infer_schema_from_csv(csv_file, column_names):
+    data_stats = tfdv.generate_statistics_from_csv(data_location=csv_file, column_names=column_names)
+    
+    #tfdv.visualize_statistics(data_stats)
+    schema = tfdv.infer_schema(statistics=data_stats)
+    
+    return schema 
+
+'''
+@description: same function from assignment 2; determines whether the new csv file 
+              has anomalies against the schema
+@params: csv_file - new csv filepath to compare against schema
+         schema - schema against which to compare the new csv file
+@return: True - if there are anomalies
+          False - if there are no anomalies
+'''
+def has_anomalies(csv_file, schema, environment='TRAINING'):
+    #get column names from passed in schema
+    cols = [f.name for f in schema.feature].sort()
+    
+    options = tfdv.StatsOptions(schema=schema, infer_type_from_schema=True)
+    data_stats = tfdv.generate_statistics_from_csv(data_location=csv_file,\
+                                                   column_names=cols, stats_options=options)
+    
+    # Check eval data for errors by validating the eval data stats using the previously inferred schema
+    anomalies = tfdv.validate_statistics(statistics=data_stats, schema=schema)
+    
+    #tfdv.display_anomalies(anomalies)
+
+    if len(anomalies.anomaly_info) > 0:
+        return True
+    else:
+        return False
+    
+def get_num_anomalies(csv_file, schema, environment='TRAINING'):
+    #get column names from passed in schema
+    cols = [f.name for f in schema.feature].sort()
+    
+    options = tfdv.StatsOptions(schema=schema, infer_type_from_schema=True)
+    data_stats = tfdv.generate_statistics_from_csv(data_location=csv_file,\
+                                                   column_names=cols, stats_options=options)
+    
+    # Check eval data for errors by validating the eval data stats using the previously inferred schema
+    anomalies = tfdv.validate_statistics(statistics=data_stats, schema=schema, environment=environment)
+    
+    #tfdv.display_anomalies(anomalies)
+
+    return len(anomalies.anomaly_info)
+
+'''
+@description: takes the current csv file and updates the passed in schema to include its values as "valid"
+@params: csv_file - new csv file to add to the schema
+         schema - schema to be updated
+@return: updated_schema - new schema with anomalies of csv_file param added
+'''
+def update_schema(csv_file, schema):
+    #get column names from passed in schema
+    cols = [f.name for f in schema.feature].sort()
+    
+    options = tfdv.StatsOptions(schema=schema, infer_type_from_schema=True)
+    new_batch_stats = tfdv.generate_statistics_from_csv(data_location=csv_file,\
+                                                        column_names=cols, stats_options = options)
+
+    # Check eval data for errors by validating the eval data stats using the previously inferred schema
+    updated_schema = tfdv.update_schema(schema, new_batch_stats)
+    #tfdv.display_schema(schema=updated_schema)
+
+    return updated_schema
+
+'''
+@description: updates the schema for num_files number of files
+@params: all_filenames - string list of all csv filenames
+         num_files - the number of files we want to include in our "acceptable" schema
+@return: updated_schema - new schema with anomalies of all num_files number of csv files added
+'''
+def acceptable_schema(training_files):
+    successful = True
+    
+    for i, file in enumerate(training_files):
+        #print("Reading file: ", file)
+        
+        #for the first file read in, infer its schema
+        if i == 0:
+            columns = list(pd.read_csv(file, error_bad_lines=False).columns).sort()
+            schema = infer_schema_from_csv(file, columns)
+        else:
+            schema = update_schema(file, schema) #updated schema
+            #sanity check to make sure this is working
+            if has_anomalies(file, schema):
+                print('Unsuccessful schema update on file number {}: {}'.format(i,file))
+                successful = False
+                break
+                
+    if successful:
+        print("Schema successfully updated for all {} files".format(len(training_files)))
+        
+    return schema
