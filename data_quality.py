@@ -13,7 +13,6 @@ import warnings
 from tensorflow_metadata.proto.v0 import schema_pb2
 warnings.simplefilter('ignore')
 
-
 '''
 @description: this function reads in a series of filenames and separates them into clean + dirty filenames
 @params: all_files - the filename of all batch .csv files, should be of the form 'filepath/*.csv'
