@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[80]:
-
-
 import numpy as np
 import pandas as pd
 import glob
