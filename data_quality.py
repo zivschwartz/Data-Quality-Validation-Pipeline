@@ -13,7 +13,6 @@ import warnings
 from tensorflow_metadata.proto.v0 import schema_pb2
 warnings.simplefilter('ignore')
 
-
 '''
 @description: this function reads in a series of filenames and separates them into clean + dirty filenames
 @params: all_files - the filename of all batch .csv files, should be of the form 'filepath/*.csv'
@@ -235,13 +234,13 @@ def is_acceptable(train_batch, test_batch, method):
     else: #method == 'baseline'
         pass #Ziv put your function here
     
-def analysis(i, train_type, clean, dirty, batch_size):
+def analysis(i, train_type, clean, dirty, batch_size, method):
     if train_type == 'rolling':
-        dirty_val = is_acceptable(clean[i:i+batch_size], dirty[i+batch_size: i+batch_size+1])
-        clean_val = is_acceptable(clean[i:i+batch_size], clean[i+batch_size: i+batch_size+1])
+        dirty_val = is_acceptable(clean[i:i+batch_size], dirty[i+batch_size: i+batch_size+1], method)
+        clean_val = is_acceptable(clean[i:i+batch_size], clean[i+batch_size: i+batch_size+1], method)
     else:
-        dirty_val = is_acceptable(clean[0:i+batch_size], dirty[i+batch_size: i+batch_size+1])
-        clean_val = is_acceptable(clean[0:i+batch_size], clean[i+batch_size: i+batch_size+1])
+        dirty_val = is_acceptable(clean[0:i+batch_size], dirty[i+batch_size: i+batch_size+1], method)
+        clean_val = is_acceptable(clean[0:i+batch_size], clean[i+batch_size: i+batch_size+1], method)
     if dirty_val == False:
         dirty_correct = True
     else:
