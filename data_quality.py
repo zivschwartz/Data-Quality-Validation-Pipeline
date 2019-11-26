@@ -231,8 +231,48 @@ def is_acceptable(train_batch, test_batch, method):
         else:
             return False
         
-    else: #method == 'baseline'
-        pass #Ziv put your function here
+    elif method == 'baseline':
+        
+        #if flights data
+        if 'FLIGHTS' in test_batch[0]: 
+            data = 'flight'
+        #if facebook data    
+        if 'FBPosts' in test_batch[0]: 
+            data = 'fb'
+
+        if data == 'flight':
+            test_batch_completeness, __ = completeness_dataframes(test_batch, test_batch)
+            test_batch_distinct, __ = distinct_counts_dataframes(test_batch, test_batch)
+            accepted = 0
+            not_accepted = 0
+            for i in range(len(test_batch_distinct.values)):
+                # values based off mean values for flights data of distinct values and completeness
+                if test_batch_distinct.values[i][0] > 100 and test_batch_completeness.values[i][0] > 0.2:
+                    not_accepted += 1 # if both values true than add to not_accepted
+                else:
+                    accepted += 1 # if not then accepted
+
+            if not_accepted == 0:
+                return True
+            else:
+                return False
+                
+        if data == 'fb':
+            test_batch_completeness, __ = completeness_dataframes(test_batch, test_batch)
+            test_batch_distinct, __ = distinct_counts_dataframes(test_batch, test_batch)
+            accepted = 0
+            not_accepted = 0
+            for i in range(len(test_batch_distinct.values)):
+                # values based off mean values for fb data of distinct values and completeness
+                if test_batch_distinct.values[i][0] > 30 and test_batch_completeness.values[i][0] > 0.25:
+                    not_accepted += 1 # if both values true than add to not_accepted
+                else:
+                    accepted += 1 # if not then accepted
+
+            if not_accepted == 0:
+                return True
+            else:
+                return False
     
 def analysis(i, train_type, clean, dirty, batch_size, method):
     if train_type == 'rolling':
