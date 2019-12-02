@@ -1,0 +1,2 @@
+train_type,batch_size,accuracy
+increasing,3,0.48
