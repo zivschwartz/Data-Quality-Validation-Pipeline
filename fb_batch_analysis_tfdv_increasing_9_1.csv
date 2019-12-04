@@ -1,0 +1,15 @@
+train_type,batch_size,test_batch,clean_correct,dirty_correct
+increasing,9,30,True,False
+increasing,9,31,True,False
+increasing,9,32,True,False
+increasing,9,33,True,False
+increasing,9,34,True,False
+increasing,9,35,True,False
+increasing,9,36,False,False
+increasing,9,37,True,False
+increasing,9,38,True,False
+increasing,9,39,True,False
+increasing,9,40,True,False
+increasing,9,41,True,False
+increasing,9,42,True,False
+increasing,9,43,True,False
