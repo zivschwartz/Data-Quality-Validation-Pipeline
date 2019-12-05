@@ -231,7 +231,7 @@ def is_acceptable(train_batch, test_batch, method):
         else:
             return False
         
-    elif method == 'baseline':
+    elif method == 'exploratory':
         
         #if flights data
         if 'FLIGHTS' in test_batch[0]: 
