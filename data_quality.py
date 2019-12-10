@@ -93,7 +93,6 @@ def completeness_dataframes(clean_files, dirty_files):
     clean_completeness_ratio_df = clean_completeness_ratio_df[clean_completeness_ratio_df.index.isin(cols_to_use)]
     dirty_completeness_ratio_df = dirty_completeness_ratio_df[dirty_completeness_ratio_df.index.isin(cols_to_use)]
     
-        
     return clean_completeness_ratio_df, dirty_completeness_ratio_df
 
 
@@ -119,7 +118,37 @@ def distinct_counts_dataframes(clean_files, dirty_files):
     return clean_distinct_counts_df, dirty_distinct_counts_df
 
 
+def percent_null_dataframes(clean_files, dirty_files):
+    clean_percent_null_df = pd.DataFrame(columns=clean_files)
+    dirty_percent_null_df = pd.DataFrame(columns=dirty_files)
+    
+    clean_null_list = []
+    for file in clean_files:
+        data = pd.read_csv(file)
+        total_null_count = data.isnull().sum().sum()
+        total_value_count = data.shape[0]*data.shape[1]
+        percent_null = total_null_count/total_value_count
+        clean_null_list.append(percent_null)
+    clean_percent_null_df.loc[0] = clean_null_list
+    
+    dirty_null_list = []
+    for file in dirty_files:
+        data = pd.read_csv(file)
+        total_null_count = data.isnull().sum().sum()
+        total_value_count = data.shape[0]*data.shape[1]
+        percent_null = total_null_count/total_value_count
+        dirty_null_list.append(percent_null)
+    dirty_percent_null_df.loc[0] = dirty_null_list
+    
+    return clean_percent_null_df, dirty_percent_null_df
 
+def determine_baseline_range(batches):
+    clean_percent_null_df, __ = percent_null_dataframes(batches, batches)
+    percent_null_range = pd.DataFrame(columns = ['min', 'max'])
+    percent_null_range['min'] = clean_percent_null_df.min(axis=1)
+    percent_null_range['max'] = clean_percent_null_df.max(axis=1)
+    
+    return percent_null_range
 
 # for column in flights_dirty_completeness_ratio_df.index.tolist():
 #     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20,5))
@@ -139,38 +168,41 @@ def determine_acceptable_metric_range(batches):
     distinct_df, __ = distinct_counts_dataframes(batches, batches)
     completeness_means = completeness_df.mean(axis=1)
     completeness_vars = np.sqrt(completeness_df.var(axis = 1, ddof=len(batches)-1))
-    completeness_ste = completeness_df.std(axis=1)
     
     completeness_range = pd.DataFrame(columns = ['min', 'max'])
     completeness_range['min'] = completeness_means - 2*completeness_vars
     completeness_range['max'] = completeness_means + 2*completeness_vars
-#     completeness_range['min'] = completeness_means - 3*completeness_ste
-#     completeness_range['max'] = completeness_means + 3*completeness_ste
     
     distinct_means = distinct_df.mean(axis=1)
     distinct_vars = np.sqrt(distinct_df.var(axis = 1, ddof=len(batches)-1))
-    distinct_ste = distinct_df.std(axis=1)
     
     distinct_range = pd.DataFrame(columns = ['min', 'max'])
     distinct_range['min'] = distinct_means - 2*distinct_vars
     distinct_range['max'] = distinct_means + 2*distinct_vars
-#     distinct_range['min'] = distinct_means - 3*distinct_ste
-#     distinct_range['max'] = distinct_means + 3*distinct_ste
     return completeness_range, distinct_range
+    
 
 def is_acceptable(train_batch, test_batch, method):
-    if method == 'original':
+    if method == 'baseline':
+        percent_null_range = determine_baseline_range(train_batch)
+        test_batch_percent_null, __ = percent_null_dataframes(test_batch, test_batch)
+        if percent_null_range['min'].values[0] <= test_batch_percent_null.values[0][0] <= percent_null_range['max'].values[0]:
+            return True
+        else:
+            return False
+        
+    elif method == 'original':
         completeness_range, distinct_range = determine_acceptable_metric_range(train_batch)
         test_batch_completeness, __ = completeness_dataframes(test_batch, test_batch)
         test_batch_distinct, __ = distinct_counts_dataframes(test_batch, test_batch)
         completeness_within_range = 0
         distinct_within_range = 0
         for i in range(len(test_batch_distinct.values)):
-            if test_batch_distinct.values[i][0] >= (distinct_range[i:i+1]['min'][0]) and test_batch_distinct.values[i][0] <= (distinct_range[i:i+1]['max'][0]):
-                distinct_within_range = distinct_within_range + 1
-            if test_batch_completeness.values[i][0] >= (completeness_range[i:i+1]['min'][0]) and test_batch_completeness.values[i][0] <= (completeness_range[i:i+1]['max'][0]):
-                completeness_within_range = completeness_within_range + 1
-
+            if distinct_range[i:i+1]['min'][0] <= test_batch_distinct.values[i][0] <= distinct_range[i:i+1]['max'][0]:
+                distinct_within_range += 1
+            
+            if completeness_range[i:i+1]['min'][0] <= test_batch_completeness.values[i][0] <= completeness_range[i:i+1]['max'][0]:
+                completeness_within_range += 1
 
         if completeness_within_range/test_batch_completeness.shape[0] > .8 and distinct_within_range/test_batch_completeness.shape[0] > .8:
             return True
@@ -290,7 +322,8 @@ def analysis(i, train_type, clean, dirty, batch_size, method):
     else:
         clean_correct = False
     row = [train_type, batch_size, i, clean_correct, dirty_correct]
-    return row  
+    return row
+
 
 def plot_batch(data_name, dataset, batch_size_range):
     df_valid = dataset[dataset.test_batch.isnull() == False]
